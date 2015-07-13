@@ -1,0 +1,26 @@
+{
+  "name": "expressive",
+  "version": "0.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VictorQueiroz/expressive.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/VictorQueiroz/expressive/issues"
+  },
+  "homepage": "https://github.com/VictorQueiroz/expressive#readme",
+  "dependencies": {
+    "lodash": "^3.10.0",
+    "sqlbuilder": "^1.0.4"
+  },
+  "devDependencies": {
+    "Faker": "^0.7.2"
+  }
+}
