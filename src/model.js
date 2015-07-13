@@ -5,8 +5,9 @@ var Builder         = require('./builder');
 var extend          = _.extend;
 var forEach         = _.forEach;
 var isEmpty         = _.isEmpty;
-var isFunction      = _.isFunction;
+var inherits        = require('./utils/inherits');
 var isDefined       = function (value) { return !(_.isUndefined(value)); };
+var isFunction      = _.isFunction;
 var EventEmitter    = require('events');
 
 /**
@@ -45,6 +46,10 @@ function studly (value) {
   return value.replace(/\ /g, '');
 }
 
+// Extending multiple constructors
+// inside the new extended model
+inherits(Model, EventEmitter, Builder);
+
 function Model() {
   Builder.apply(this, [this.connection, this.grammar]);
 
@@ -62,14 +67,6 @@ function Model() {
 }
 
 extend(Model.prototype, {
-  parent: Builder.prototype,
-
-  initialize: function (attributes) {
-    this.fill(attributes);
-  }
-});
-
-extend(Model.prototype, EventEmitter.prototype, Builder.prototype, {
   table: '',
 
   /**
@@ -224,6 +221,10 @@ extend(Model.prototype, EventEmitter.prototype, Builder.prototype, {
 });
 
 extend(Model.prototype, {
+  initialize: function (attributes) {
+    this.fill(attributes);
+  },
+
 	save: function () {
 		if(this.exists) {
 			this.performUpdate();
