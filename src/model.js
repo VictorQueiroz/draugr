@@ -1,7 +1,6 @@
 'use strict';
 
 var _               = require('lodash');
-var util            = require('util');
 var Builder         = require('./builder');
 var extend          = _.extend;
 var forEach         = _.forEach;
