@@ -10,7 +10,8 @@ function Expressive(builder) {
 
 	this.Model = Model.extend({
 		grammar: builder.grammar,
-		connection: builder.connection
+		connection: builder.connection,
+		expressive: this
 	});
 }
 

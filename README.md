@@ -16,4 +16,8 @@ var User = expressive.Model.extend({
 User.find(2).then(function (user) {
 	res.json(user);
 });
+
+User.all().then(function (user) {
+	res.json(user);
+});
 ```

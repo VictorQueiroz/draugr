@@ -348,6 +348,26 @@ extend(Model.prototype, {
       return data.rows;
     });
   },
+
+  find: function (id, columns) {
+    columns = columns || ['*'];
+
+    if(id) {
+      return this.where(this.primaryKey, '=', id).first(columns);
+    }
+
+    /**
+     * If there is no id defined, list the resource.
+     * This way, there's two ways we can use this method
+     */
+    else {
+      return this.get(columns);
+    }
+  },
+
+  all: function (columns) {
+    return this.find(null, columns);
+  }
 });
 
 extend(Model, {
@@ -355,17 +375,15 @@ extend(Model, {
     return callback(new this());
   },
 
-  find: function (id) {
+  find: function (id, columns) {
     return this.instantiate(function (model) {
-      var response = model;
+      return model.find(id, columns);
+    });
+  },
 
-      if(id) {
-        response.where(model.primaryKey, id);
-      }
-
-      return response.get().then(function (data) {
-        return model.fill(data);
-      });
+  all: function (columns) {
+    return this.instantiate(function (model) {
+      return model.all(columns);
     });
   },
 

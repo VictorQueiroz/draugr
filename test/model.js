@@ -27,12 +27,24 @@ describe('Model', function () {
     });
   });
 
+  describe('instance', function () {
+    it('should fill the model with new attributes through the constructor', function () {
+      var user = new User(first(users));
+
+      assert.deepEqual(first(users), user.attributes);
+    });
+
+    it('should have a primary key defined in the prototype', function () {
+      assert.equal('id', expressive.Model.prototype.primaryKey);
+    });
+  });
+
   describe('constructor', function () {
-  	it('should list items on a model', function (done) {
-      mockConnection.expectQuery('select * from `users` where `id` = "1"').respond(first(users));
-      mockConnection.expectQuery('select * from `users`').respond(users);
+  	it('should find a resource', function (done) {
+      mockConnection.expectQuery('select * from `users` where `id` = "1" limit 1').respond(first(users));
 
       User.find(1).then(function (user) {
+        assert.deepEqual(first(users), user);
       }).then(function () {
         done();
       }, function (err) {
@@ -40,14 +52,20 @@ describe('Model', function () {
       });
     });
 
-    it('should fill the model with new attributes through the constructor', function () {
-      var user = new User(users[0]);
+    it('should list all resources', function () {
+      mockConnection.expectQuery('select * from `users`').respond(users);
 
-      assert.deepEqual(users[0], user.attributes);
-    });
+      User.find().then(function (users) {
+        assert.deepEqual(users, users);
 
-    it('should have a primary key defined in the prototype', function () {
-      assert.equal('id', expressive.Model.prototype.primaryKey);
+        return User.all(['id', 'name']);
+      }).then(function (users) {
+        assert.deepEqual(users, users);
+      }).then(function () {
+        done();
+      }, function (err) {
+        done(err);
+      });
     });
   });
 });
