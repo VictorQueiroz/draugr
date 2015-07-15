@@ -1,4 +1,4 @@
-# expressive
+# draugr
 
 ## Example 1
 ```js
@@ -8,9 +8,10 @@ var sqlbuilder = require('sqlbuilder')({
 	password: ''
 });
 
-var expressive = require('expressive')(sqlbuilder);
-var User = expressive.Model.extend({
-	
+var draugr = require('draugr')(sqlbuilder);
+var User = draugr.Model.extend({
+	table: 'users',
+	name: 'User'
 });
 
 User.find(2).then(function (user) {

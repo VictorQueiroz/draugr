@@ -1,21 +1,21 @@
 {
-  "name": "expressive",
-  "version": "0.0.0",
-  "description": "",
+  "name": "draugr",
+  "version": "0.0.2",
+  "description": "Laravel 3+ ORM ported to Node.js",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "mocha test/**"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/VictorQueiroz/expressive.git"
+    "url": "git+https://github.com/VictorQueiroz/draugr.git"
   },
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/VictorQueiroz/expressive/issues"
+    "url": "https://github.com/VictorQueiroz/draugr/issues"
   },
-  "homepage": "https://github.com/VictorQueiroz/expressive#readme",
+  "homepage": "https://github.com/VictorQueiroz/draugr#readme",
   "dependencies": {
     "inflection": "^1.7.1",
     "lodash": "^3.10.0",
