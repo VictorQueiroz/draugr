@@ -17,6 +17,7 @@
   },
   "homepage": "https://github.com/VictorQueiroz/expressive#readme",
   "dependencies": {
+    "inflection": "^1.7.1",
     "lodash": "^3.10.0",
     "sqlbuilder": "^1.0.51"
   },

@@ -1,8 +1,8 @@
-var _     = require('lodash');
-var first = _.first;
-var faker = require('Faker');
-
-var assert = require('assert');
+var _       = require('lodash');
+var first   = _.first;
+var faker   = require('Faker');
+var extend  = _.extend;
+var assert  = require('assert');
 
 var MockConnection = require('sqlbuilder/helpers/mock-connection');
 
@@ -15,15 +15,74 @@ var mockConnection = builder.connection;
 var expressive = require('../src/expressive')(builder);
 
 describe('Model', function () {
-  var User, users = [];
+  var User, users = [], posts = [];
 
   beforeEach(function () {
     for(var i=0; i<10; i++) {
-      users.push(faker.Helpers.userCard());
+      posts.push(extend({
+        id: Math.pow(i + 2, 3),
+        user_id: i + 1,
+        body: faker.Lorem.sentences(3)
+      }));
+      users.push(extend({
+        id: i + 1
+      }, faker.Helpers.userCard()));
     }
 
+    var Phone = expressive.Model.extend({
+      table: 'phones',
+      name: 'Phone'
+    });
+
+    var Post = expressive.Model.extend({
+      name: 'Post',
+      table: 'posts'
+    });
+
     User = expressive.Model.extend({
-      table: 'users'
+      name: 'User',
+      table: 'users',
+      phone: function () {
+        return this.hasOne(Phone);
+      },
+      posts: function () {
+        return this.hasMany(Post);
+      }
+    });
+  });
+
+  describe('relations', function () {
+    it('should define a one-to-one relationship', function () {
+      mockConnection.expectQuery('select * from `phones` where `phones`.`user_id` = "1" `phones`.`user_id` is not null limit 1').respond({
+        id: 1,
+        phoneNumber: '4321565489'
+      });
+
+      var user = new User(users[0]);
+
+      user.phone().getResults().then(function (r) {
+        assert.equal(1, r.id);
+        assert.equal('4321565489', r.phoneNumber);
+      });
+    });
+
+    it('should define a one-to-many relationship', function (done) {
+      mockConnection.expectQuery('select * from `posts` where `posts`.`user_id` = "2" `posts`.`user_id` is not null').respond(posts);
+      mockConnection.expectQuery('select * from `posts` where `posts`.`user_id` = "2" `posts`.`user_id` is not null limit 1').respond(posts[3]);
+
+      var user = new User(users[1]);
+
+      user.posts().get().then(function (posts) {
+        assert.equal(20, posts.length);
+        assert.equal(8, first(posts).id);
+
+        return user.posts().first();
+      }).then(function (post) {
+        assert.deepEqual(posts[3], post);
+        done();
+      }, function (err) {
+        done(err);
+      });
     });
   });
 

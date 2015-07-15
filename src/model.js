@@ -1,13 +1,20 @@
 'use strict';
 
 var _               = require('lodash');
+var last            = _.last;
+var first           = _.first;
 var Builder         = require('./builder');
 var extend          = _.extend;
-var forEach         = _.forEach;
+var HasOne          = require('./relations/hasone');
+var HasMany         = require('./relations/hasmany');
 var isEmpty         = _.isEmpty;
+var forEach         = _.forEach;
+var isString        = _.isString;
 var inherits        = require('./utils/inherits');
 var isDefined       = function (value) { return !(_.isUndefined(value)); };
+var inflection      = require('inflection');
 var isFunction      = _.isFunction;
+var isUndefined     = _.isUndefined;
 var EventEmitter    = require('events');
 
 /**
@@ -25,6 +32,33 @@ function startsWith (haystack, needles) {
   return has;
 }
 
+function class_basename (fn) {
+  fn = fn.constructor || fn;
+
+  return first(fn.toString().match(/^function\s*([A-z0-9]+)/));
+}
+
+function ctype_lower(text) {
+  if (!isString(text)) {
+    return false;
+  }
+  return text === text.toLowerCase();
+}
+
+function snake(value, delimiter) {
+  delimiter = delimiter || '_';
+  value     = value || '';
+
+  var key = `${value}${delimiter}`;
+
+  if(!ctype_lower(value)) {
+    value = value.toLowerCase().replace(/(.)(?=[A-Z])/, `$1${delimiter}`);
+    value = value.replace(/\s+/, '');
+  }
+
+  return value;
+}
+
 /**
  * Uppercase the first character of each word in a string
  */
@@ -39,6 +73,8 @@ function ucwords(str) {
  * Convert a value to studly caps case.
  */
 function studly (value) {
+  value = value || '';
+
   var key = value;
 
   value = ucwords(value.replace(/[-_]/g, ' '));
@@ -253,7 +289,7 @@ extend(Model.prototype, {
   getDates: function () {
     var defaults = [this.CREATED_AT, this.UPDATED_AT];
 
-    return this.dates = this.dates.concat(defaults);
+    return (this.dates = this.dates.concat(defaults));
   },
 
   isFillable: function (key) {
@@ -344,7 +380,7 @@ extend(Model.prototype, {
    * get only the rows from the SQL query result
    */
   get: function () {
-    return this.parent.get.apply(this, arguments).then(function (data) {
+    return this._parent_.get.apply(this, arguments).then(function (data) {
       return data.rows;
     });
   },
@@ -367,6 +403,137 @@ extend(Model.prototype, {
 
   all: function (columns) {
     return this.find(null, columns);
+  },
+
+  getTable: function () {
+    if(this.table || this._from) {
+      return this.table || this._from;
+    }
+
+    return snake(inflection.pluralize(class_basename(this))).replace(/\\/, '');
+  },
+
+  getClassName: function () {
+    var className = class_basename(this) || this.name;
+
+    return className;
+  },
+
+  getForeignKey: function () {
+    return `${snake(this.getClassName())}_id`;
+  },
+
+  getKeyName: function () {
+    return this.primaryKey;
+  },
+
+  getAttribute: function (key) {
+    if(isDefined(this.attributes[key]) || this.hasGetMutator(key)) {
+      return this.getAttributeValue(key);
+    }
+
+    return this.getRelationValue(key);
+  },
+
+  getAttributeValue: function (key) {
+    var value = this.getAttributeFromObject(key);
+
+    // If the attribute has a get mutator, we will call that then return what
+    // it returns as the value, which is useful for transforming values on
+    // retrieval from the model to a form that is more useful for usage.
+    if(this.hasGetMutator(key)) {
+      return this.mutateAttribute(key, value);
+    }
+
+    // If the attribute exists within the cast array, we will convert it to
+    // an appropriate native PHP type dependant upon the associated value
+    // given with the key in the pair. Dayle made this comment line up.
+    if(this.hasCast(key)) {
+      value = this.castAttribute(key, value);
+    }
+
+    // If the attribute is listed as a date, we will convert it to a DateTime
+    // instance on retrieval, which makes it quite convenient to work with
+    // date fields without having to create a mutator for each property.
+    else if (this.getDates().indexOf(key) > -1) {
+      if(!isUndefined(value)) {
+        return this.asDateTime(value);
+      }
+    }
+
+    return value;
+  },
+
+  relationLoaded: function (key) {
+    return isFunction(this.relations[key]);
+  },
+
+  getRelationValue: function (key) {
+    // If the key already exists in the relationships array, it just means the
+    // relationship has already been loaded, so we'll just return it out of
+    // here because there is no need to query within the relations twice.
+    if(this.relationLoaded(key)) {
+      return this.relations[key];
+    }
+
+    // If the "attribute" exists as a method on the model, we will just assume
+    // it is a relationship and will load and return results from the query
+    // and hydrate the relationship's value on the "relationships" array.
+    if(isFunction(this[key])) {
+      return this.getRelationshipFromMethod(key);
+    }
+  },
+
+  getAttributeFromObject: function (key) {
+    if(this.attributes[key]) {
+      return this.attributes[key];
+    }
+  },
+
+  getRelationshipFromMethod: function (method) {
+    var relations = this[method]();
+
+    if(!(first(relations) instanceof Relation)) {
+      throw new Error('Relationship method must return an object of type Relation');
+    }
+
+    return this.relations[method] = relations.getResults();
+  },
+
+  hasGetMutator: function (key) {
+    return isFunction(this[`get${studly(key)}Attribute`]);
+  },
+
+  mutateAttribute: function (key, value) {
+    return this[`get${studly(key)}Attribute`](value);
+  }
+});
+
+// Relationships
+extend(Model.prototype, {
+  /**
+  * Define a one-to-one relationship.
+  */
+  hasOne: function (related, foreignKey, localKey) {
+    foreignKey = foreignKey || this.getForeignKey();
+
+    var instance = new related();
+
+    localKey = localKey || this.getKeyName();
+
+    return new HasOne(instance, this, `${instance.getTable()}.${foreignKey}`, localKey);
+  },
+
+  /**
+   * Define a one-to-many relationship.
+   */
+  hasMany: function (related, foreignKey, localKey) {
+    foreignKey = foreignKey || this.getForeignKey();
+    localKey = localKey || this.getKeyName();
+
+    var instance = new related();
+
+    return new HasMany(instance, this, `${instance.getTable()}.${foreignKey}`, localKey);
   }
 });
 
