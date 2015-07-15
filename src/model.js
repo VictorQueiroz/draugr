@@ -1,6 +1,7 @@
 'use strict';
 
 var _               = require('lodash');
+var map             = _.map;
 var last            = _.last;
 var first           = _.first;
 var Builder         = require('./builder');
@@ -13,9 +14,12 @@ var isString        = _.isString;
 var inherits        = require('./utils/inherits');
 var isDefined       = function (value) { return !(_.isUndefined(value)); };
 var inflection      = require('inflection');
+var Collection      = require('./collection');
 var isFunction      = _.isFunction;
 var isUndefined     = _.isUndefined;
 var EventEmitter    = require('events');
+var QueryBuilder    = require('sqlbuilder/src/querybuilder');
+var HasManyThrough  = require('./relations/hasmanythrough');
 
 /**
  * Determine if a given string starts with a given substring.
@@ -84,18 +88,16 @@ function studly (value) {
 
 // Extending multiple constructors
 // inside the new extended model
-inherits(Model, EventEmitter, Builder);
+inherits(Model, EventEmitter);
 
 function Model() {
-  Builder.apply(this, [this.connection, this.grammar]);
-
   // Call event emitter constructor on this
 	EventEmitter.call(this);
 
 	this.emit('initialized');
 
   // Auto set the table to the table name of this model
-  this.from(this.table);
+  // this.from(this.table);
 
   if(isFunction(this.initialize)) {
     this.initialize.apply(this, arguments);
@@ -256,7 +258,17 @@ extend(Model.prototype, {
   UPDATED_AT: 'updated_at',
 });
 
+var globalScopes = [];
+
 extend(Model.prototype, {
+  getQualifiedKeyName: function () {
+    return `${this.getTable()}.${this.getKeyName()}`;
+  },
+
+  getGlobalScopes: function () {
+    return globalScopes;
+  },
+
   initialize: function (attributes) {
     this.fill(attributes);
   },
@@ -374,13 +386,14 @@ extend(Model.prototype, {
     return isFunction(this[`set${studly(key)}Attribute`]);
   },
 
-  /**
-   * Extend the Builder `get` method,
-   * so we can ensure that we will always
-   * get only the rows from the SQL query result
-   */
-  get: function () {
-    return this._parent_.get.apply(this, arguments).then(function (data) {
+  get: function (columns) {
+    return this.newQuery().get(columns).then(function (data) {
+      return data.rows;
+    });
+  },
+
+  first: function (columns) {
+    return this.newQuery().first(columns).then(function (data) {
       return data.rows;
     });
   },
@@ -399,6 +412,12 @@ extend(Model.prototype, {
     else {
       return this.get(columns);
     }
+  },
+
+  where: function () {
+    var query = this.newQuery();
+
+    return query.where.apply(query, arguments);
   },
 
   all: function (columns) {
@@ -506,6 +525,116 @@ extend(Model.prototype, {
 
   mutateAttribute: function (key, value) {
     return this[`get${studly(key)}Attribute`](value);
+  },
+
+  newQuery: function () {
+    var builder = this.newQueryWithoutScopes();
+
+    return this.applyGlobalScopes(builder);
+  },
+
+  newQueryWithoutScope: function (scope) {
+    var builder = this.newQuery();
+
+    this.getGlobalScope(scope).remove(builder, this);
+
+    return builder;
+  },
+
+  newQueryWithoutScopes: function () {
+    var builder = this.newEloquentBuilder(
+      this.newBaseQueryBuilder()
+    );
+
+    // Once we have the query builders, we will set the model instances so the
+    // builder can easily access any information it may need from the model
+    // while it is constructing and executing various queries against it.
+    return builder.setModel(this).with(this.with);
+  },
+
+  applyGlobalScopes: function (builder) {
+    forEach(this.getGlobalScopes(), function (scope) {
+      scope.$apply(builder, this);
+    });
+
+    return builder;
+  },
+
+  removeGlobalScopes: function (builder) {
+    forEach(this.getGlobalScopes(), function (scope) {
+      scope.remove(builder, this);
+    });
+
+    return builder;
+  },
+
+  newEloquentBuilder: function (query) {
+    return new Builder(query);
+  },
+
+  newBaseQueryBuilder: function () {
+    var builder = this.expressive.builder;
+    var connection = builder.connection;
+    var grammar = builder.grammar;
+
+    return new QueryBuilder(connection, grammar);
+  },
+
+  getConnectionName: function () {
+    return this.connection;
+  },
+
+  /**
+   * Create a collection of models from plain arrays.
+   */
+  hydrate: function (items, connection) {
+    return items;
+  },
+
+  newFromBuilder: function (attributes, connection) {
+    var model = this.newInstance([], true);
+
+    model.setRawAttributes(attributes, true);
+    model.setConnection(connection || this.connection);
+
+    return model;
+  },
+
+  newInstance: function (attributes, exists) {
+    // This method just provides a convenient way for us to generate fresh model
+    // instances of this current model. It is particularly useful during the
+    // hydration of new objects via the Eloquent query builder instances.
+    var model = this.clone();
+
+    model.exists = exists || false;
+
+    return model;
+  },
+
+  clone: function () {
+    return new this.constructor(this.attributes);
+  },
+
+  setRawAttributes: function (attributes, sync) {
+    this.attributes = attributes;
+
+    if(sync) {
+      this.syncOriginal();
+    }
+  },
+
+  syncOriginal: function () {},
+
+  setConnection: function (name) {
+    this.connection = name;
+
+    return this;
+  },
+
+  newCollection: function (models) {
+    return models.then(function (data) {
+      return data.rows;
+    });
   }
 });
 
@@ -521,7 +650,7 @@ extend(Model.prototype, {
 
     localKey = localKey || this.getKeyName();
 
-    return new HasOne(instance, this, `${instance.getTable()}.${foreignKey}`, localKey);
+    return new HasOne(instance.newQuery(), this, `${instance.getTable()}.${foreignKey}`, localKey);
   },
 
   /**
@@ -533,7 +662,18 @@ extend(Model.prototype, {
 
     var instance = new related();
 
-    return new HasMany(instance, this, `${instance.getTable()}.${foreignKey}`, localKey);
+    return new HasMany(instance.newQuery(), this, `${instance.getTable()}.${foreignKey}`, localKey);
+  },
+
+  /**
+   * Define a has-many-through relationship.
+   */
+  hasManyThrough: function (related, through, firstKey, secondKey, localKey) {
+    firstKey = firstKey || this.getForeignKey();
+    secondKey = secondKey || this.getForeignKey();
+    localKey = localKey || this.getKeyName();
+
+    return new HasManyThrough((new related()).newQuery(), this, new through(), firstKey, secondKey, localKey);
   }
 });
 

@@ -15,18 +15,20 @@ var mockConnection = builder.connection;
 var expressive = require('../src/expressive')(builder);
 
 describe('Model', function () {
-  var User, users = [], posts = [];
+  var User,       Post,       Country,
+      users = [], posts = [];
 
   beforeEach(function () {
     for(var i=0; i<10; i++) {
-      posts.push(extend({
+      posts.push({
         id: Math.pow(i + 2, 3),
         user_id: i + 1,
         body: faker.Lorem.sentences(3)
-      }));
-      users.push(extend({
-        id: i + 1
-      }, faker.Helpers.userCard()));
+      });
+
+      var u = faker.Helpers.userCard();
+      u.id = i + 1;
+      users.push(u);
     }
 
     var Phone = expressive.Model.extend({
@@ -34,7 +36,7 @@ describe('Model', function () {
       name: 'Phone'
     });
 
-    var Post = expressive.Model.extend({
+    Post = expressive.Model.extend({
       name: 'Post',
       table: 'posts'
     });
@@ -49,10 +51,18 @@ describe('Model', function () {
         return this.hasMany(Post);
       }
     });
+
+    Country = expressive.Model.extend({
+      table: 'countries',
+      name: 'Country',
+      posts: function () {
+        return this.hasManyThrough(Post, User);
+      }
+    });
   });
 
   describe('relations', function () {
-    it('should define a one-to-one relationship', function () {
+    it('should define a one-to-one relationship', function (done) {
       mockConnection.expectQuery('select * from `phones` where `phones`.`user_id` = "1" `phones`.`user_id` is not null limit 1').respond({
         id: 1,
         phoneNumber: '4321565489'
@@ -60,9 +70,10 @@ describe('Model', function () {
 
       var user = new User(users[0]);
 
-      user.phone().getResults().then(function (r) {
+      user.phone().first().then(function (r) {
         assert.equal(1, r.id);
         assert.equal('4321565489', r.phoneNumber);
+        done();
       });
     });
 
@@ -82,6 +93,20 @@ describe('Model', function () {
         done();
       }, function (err) {
         done(err);
+      });
+    });
+
+    it('should define a has-many-through relationship', function (done) {
+      mockConnection.expectQuery('select *, `users`.`country_id` from `posts` inner join `users` on `users`.`id` = `posts`.`country_id` where `users`.`country_id` = "2"').respond(posts);
+
+      var country = new Country({
+        name: 'USA',
+        id: 2
+      });
+
+      country.posts().get().then(function (posts) {
+        assert.equal(30, posts.length);
+        done();
       });
     });
   });

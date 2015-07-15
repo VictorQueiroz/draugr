@@ -91,7 +91,7 @@ extend(Relation.prototype, {
 // Methods extended from QueryBuilder 
 extend(Relation.prototype, {
 	get: function () {
-		return this.query.get();
+		return this.query.get.apply(this.query, arguments);
 	},
 
 	where: function () {

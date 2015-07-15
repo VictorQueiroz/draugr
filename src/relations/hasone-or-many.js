@@ -1,14 +1,19 @@
 var _ 						= require('lodash'),
 		md5						= require('../utils/md5'),
 		extend				= _.extend,
+    Builder       = require('../builder'),
 		inherits				= require('../utils/inherits'),
+    Relation      = require('./relation'),
 		microtime 			= require('../utils/microtime'),
-		Expression			= require('sqlbuilder/src/expression'),
-		Relation				= require('./relation');
+		Expression			= require('sqlbuilder/src/expression');
 
 inherits(HasOneOrMany, Relation);
 
 function HasOneOrMany(query, parent, foreignKey, localKey) {
+  if(!(query instanceof Builder)) {
+    throw new Error('query must be an instance of Builder');
+  }
+
 	this.localKey = localKey;
 	this.foreignKey = foreignKey;
 
