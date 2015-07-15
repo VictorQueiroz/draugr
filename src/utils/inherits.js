@@ -14,7 +14,7 @@ module.exports = function () {
 		var proto 					= bullet.prototype;
 		var targetCtorProto = targetCtor.prototype;
 
-		targetCtorProto.parent = proto;
+		targetCtorProto._parent_ = proto;
 
 		extend(targetCtorProto, proto);
 	});
