@@ -17,7 +17,7 @@ function startsWith (haystack, needles) {
   var has = false;
 
   forEach(needles, function (needle) {
-    if(isEmpty(needle) && haystack.indexOf(needle) == 0) {
+    if(isEmpty(needle) && haystack.indexOf(needle) === 0) {
       has = true;
     }
   });
